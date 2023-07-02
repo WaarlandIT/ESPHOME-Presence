@@ -1,5 +1,6 @@
 substitutions:
   roomname: livingroom
+  roomsize: 7
   wifi_ssid: !secret wifissid
   wifi_key: !secret wifipass
   mqtt_server: !secret mqttserver
@@ -106,7 +107,7 @@ esp32_ble_tracker:
                   tx_power = -69;
                 }
                 float dist = pow(10, (float)(tx_power - (x.get_rssi())) / (10 * 2));
-                if (dist < 7) {
+                if (dist < $roomsize) {
                     ESP_LOGD("ble_adv", "Sending MQTT room update for '%s' (%s): %.03fm (%d rssi, %d sigpow)",
                              x.get_name().c_str(), x.address(), dist, x.get_rssi(), tx_power);
                     id(mqtt_client).publish_json(id(room_topic), [=](JsonObject root) {
