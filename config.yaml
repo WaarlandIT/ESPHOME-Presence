@@ -1,0 +1,18 @@
+  - platform: mqtt_room
+    name: Beacon green
+    device_id: "FF:F1:70:07:63:D7"
+    state_topic: room_presence
+    timeout: 10
+    away_timeout: 120
+  - platform: mqtt_room
+    name: Beacon whit
+    device_id: "EB:81:58:1B:86:E1"
+    state_topic: room_presence
+    timeout: 10
+    away_timeout: 120
+  - platform: mqtt_room
+    name: Beacon pink
+    device_id: "52:B1:05:A0:51:BC"
+    state_topic: room_presence
+    timeout: 10
+    away_timeout: 120
