@@ -1,0 +1,136 @@
+substitutions:
+  roomname: livingroom
+  wifi_ssid: !secret wifissid
+  wifi_key: !secret wifipass
+  mqtt_server: !secret mqttserver
+  mqtt_user: !secret mqttuser
+  mqtt_password: !secret mqttpass
+
+globals:
+  - id: room_topic
+    type: std::string
+    initial_value: '"room_presence/${roomname}"'
+
+esphome:
+  name: $roomname
+  friendly_name: rpw-ups-1 $roomname
+  platform: ESP32
+  board: nodemcu-32s
+
+logger:
+
+ota:
+
+wifi:
+  ssid: $wifi_ssid
+  password: $wifi_key
+
+captive_portal:
+
+mqtt:
+  broker: $mqtt_server
+  username: $mqtt_user
+  password: $mqtt_password
+  discovery: true 
+  id: mqtt_client          
+
+sensor:
+  - platform: dht
+    pin: GPIO19
+    temperature:
+      name: Temperature
+      filters:
+        - offset: -11
+        - filter_out: nan
+        - heartbeat: 15s
+        - sliding_window_moving_average:
+            window_size: 2
+            send_every: 2
+            send_first_at: 1
+      unit_of_measurement: "°C"
+    humidity:
+      name: Humidity
+      filters:
+        - filter_out: nan
+        - heartbeat: 15s
+        - sliding_window_moving_average:
+            window_size: 2
+            send_every: 2
+            send_first_at: 1
+      accuracy_decimals: 1 
+    model: DHT11
+    update_interval: 20s
+  - platform: adc
+    pin: GPIO34
+    name: "Illuminance"
+    device_class: illuminance
+    unit_of_measurement: lx
+    filters:
+      - heartbeat: 15s
+      - lambda: |-
+          return (x / 1000.0) * 2000000.0;
+
+  - platform: wifi_signal
+    name: WiFi Signal Strength
+    update_interval: 60s
+
+esp32_ble_tracker:
+  on_ble_advertise:
+    - then:
+        - lambda: |-
+                std::string uuid;
+                esp_bt_uuid_t raw_uuid = x.get_ibeacon().value().get_uuid().get_uuid();
+                char sbuf[64];
+                char *bpos = sbuf;
+                switch (raw_uuid.len) {
+                    case ESP_UUID_LEN_128:
+                        for (int8_t i = 0; i <= 15; i++) {
+                            sprintf(bpos, "%02x", raw_uuid.uuid.uuid128[i]);
+                            bpos += 2;
+                            if (i == 6 || i == 8 || i == 10 || i == 12)
+                                  sprintf(bpos++, "-");
+                        }
+                        sbuf[47] = '\0';
+                        uuid.assign(sbuf);
+                        break;
+                    default:
+                        uuid = x.get_ibeacon().value().get_uuid().to_string();
+                        std::transform(uuid.begin(), uuid.end(), uuid.begin(), [](unsigned char c){ return std::tolower(c); });
+                        break;
+                }
+                char mbuf[32] = {0};
+                sprintf(mbuf, "-%hu-%hu", x.get_ibeacon().value().get_major(), x.get_ibeacon().value().get_minor());
+                uuid.append(mbuf);
+                int8_t tx_power = x.get_ibeacon().value().get_signal_power();
+                if (tx_power >= 0) {
+                  tx_power = -69;
+                }
+                float dist = pow(10, (float)(tx_power - (x.get_rssi())) / (10 * 2));
+                if (dist < 7) {
+                    ESP_LOGD("ble_adv", "Sending MQTT room update for '%s' (%s): %.03fm (%d rssi, %d sigpow)",
+                             x.get_name().c_str(), x.address(), dist, x.get_rssi(), tx_power);
+                    id(mqtt_client).publish_json(id(room_topic), [=](JsonObject root) {
+                        root["id"] = x.address_str();
+                        root["name"] = x.get_name();
+                        root["distance"] = dist;
+                        root["rssi"] = x.get_rssi();
+                        root["tx_power"] = tx_power;
+                    });
+                } else {
+                    ESP_LOGD("ble_adv", "Skipping MQTT room update for '%s' (%s): %.03fm (%d rssi, %d sigpow)",
+                             x.get_name().c_str(), x.address(), dist, x.get_rssi(), tx_power);
+                }
+
+text_sensor:
+  - platform: ble_scanner
+    name: "BLE Devices Scanner"
+
+binary_sensor:
+  - platform: gpio
+    name: Presence
+    pin:
+      number: GPIO18
+      mode:
+        input: true
+        pulldown: true
+
