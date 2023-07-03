@@ -104,7 +104,7 @@ esp32_ble_tracker:
                 uuid.append(mbuf);
                 int8_t tx_power = x.get_ibeacon().value().get_signal_power();
                 if (tx_power >= 0) {
-                  tx_power = -69;
+                  tx_power = -59;
                 }
                 float dist = pow(10, (float)(tx_power - (x.get_rssi())) / (10 * 2));
                 if (dist < $roomsize) {
