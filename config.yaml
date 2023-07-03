@@ -1,3 +1,8 @@
+
+device_tracker:
+  - platform: bluetooth_le_tracker
+
+sensor:
   - platform: mqtt_room
     name: Beacon green
     device_id: "FF:F1:70:07:63:D7"
